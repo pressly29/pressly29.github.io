@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<!-- Dead Reckoning — interactive generative art viewer (built on the Anthropic algorithmic-art template) -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dead Reckoning — Generative Art</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root{
+            --anthropic-dark:#141413;--anthropic-light:#faf9f5;--anthropic-mid-gray:#b0aea5;
+            --anthropic-light-gray:#e8e6dc;--anthropic-orange:#d97757;--anthropic-blue:#6a9bcc;--anthropic-green:#788c5d;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Poppins',sans-serif;background:linear-gradient(135deg,var(--anthropic-light) 0%,#f5f3ee 100%);min-height:100vh;color:var(--anthropic-dark)}
+        .container{display:flex;min-height:100vh;padding:20px;gap:20px}
+        .sidebar{width:320px;flex-shrink:0;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);padding:24px;border-radius:12px;box-shadow:0 10px 30px rgba(20,20,19,.1);overflow-y:auto;overflow-x:hidden}
+        .sidebar h1{font-family:'Lora',serif;font-size:24px;font-weight:500;margin-bottom:8px}
+        .sidebar .subtitle{color:var(--anthropic-mid-gray);font-size:14px;margin-bottom:32px;line-height:1.4}
+        .control-section{margin-bottom:32px}
+        .control-section h3{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+        .control-section h3::before{content:'•';color:var(--anthropic-orange);font-weight:bold}
+        .seed-input{width:100%;background:var(--anthropic-light);padding:12px;border-radius:8px;font-family:'Courier New',monospace;font-size:14px;margin-bottom:12px;border:1px solid var(--anthropic-light-gray);text-align:center}
+        .seed-input:focus{outline:none;border-color:var(--anthropic-orange);box-shadow:0 0 0 2px rgba(217,119,87,.1);background:white}
+        .seed-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+        .regen-button{margin-bottom:0}
+        .control-group{margin-bottom:20px}
+        .control-group label{display:block;font-size:14px;font-weight:500;margin-bottom:8px}
+        .slider-container{display:flex;align-items:center;gap:12px}
+        .slider-container input[type="range"]{flex:1;height:4px;background:var(--anthropic-light-gray);border-radius:2px;outline:none;-webkit-appearance:none}
+        .slider-container input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--anthropic-orange);border-radius:50%;cursor:pointer;transition:all .2s ease}
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.1);background:#c86641}
+        .slider-container input[type="range"]::-moz-range-thumb{width:16px;height:16px;background:var(--anthropic-orange);border-radius:50%;border:none;cursor:pointer}
+        .value-display{font-family:'Courier New',monospace;font-size:12px;color:var(--anthropic-mid-gray);min-width:60px;text-align:right}
+        .color-group{margin-bottom:16px}
+        .color-group label{display:block;font-size:12px;color:var(--anthropic-mid-gray);margin-bottom:4px}
+        .color-picker-container{display:flex;align-items:center;gap:8px}
+        .color-picker-container input[type="color"]{width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;background:none;padding:0}
+        .color-value{font-family:'Courier New',monospace;font-size:12px;color:var(--anthropic-mid-gray)}
+        .button{background:var(--anthropic-orange);color:white;border:none;padding:10px 16px;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s ease;width:100%}
+        .button:hover{background:#c86641;transform:translateY(-1px)}
+        .button:active{transform:translateY(0)}
+        .button.secondary{background:var(--anthropic-blue)}
+        .button.secondary:hover{background:#5a8bb8}
+        .button.tertiary{background:var(--anthropic-green)}
+        .button.tertiary:hover{background:#6b7b52}
+        .button-row{display:flex;gap:8px}
+        .button-row .button{flex:1}
+        .canvas-area{flex:1;display:flex;align-items:center;justify-content:center;min-width:0}
+        #canvas-container{width:100%;max-width:1000px;border-radius:12px;overflow:hidden;box-shadow:0 20px 40px rgba(20,20,19,.1);background:#070b14}
+        #canvas-container canvas{display:block;width:100%!important;height:auto!important}
+        .loading{display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--anthropic-mid-gray);padding:80px}
+        .note{font-size:12px;color:var(--anthropic-mid-gray);line-height:1.5;margin-top:-12px}
+        @media(max-width:600px){.container{flex-direction:column}.sidebar{width:100%}.canvas-area{padding:20px}}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Dead Reckoning</h1>
+            <div class="subtitle">A generative flow-field of drifting vessels and telemetry pulses. Each seed is a different sea, the same laws. Signature system for Elvis Rono Kibet.</div>
+
+            <!-- Seed Section -->
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="73" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ Random voyage</button>
+            </div>
+
+            <!-- Parameters Section -->
+            <div class="control-section">
+                <h3>Parameters</h3>
+
+                <div class="control-group">
+                    <label>Vessels</label>
+                    <div class="slider-container">
+                        <input type="range" id="vessels" min="150" max="1400" step="50" value="650" oninput="updateParam('vessels', this.value)">
+                        <span class="value-display" id="vessels-value">650</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Current scale</label>
+                    <div class="slider-container">
+                        <input type="range" id="noiseScale" min="0.0008" max="0.006" step="0.0002" value="0.0018" oninput="updateParam('noiseScale', this.value)">
+                        <span class="value-display" id="noiseScale-value">0.0018</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Drift force</label>
+                    <div class="slider-container">
+                        <input type="range" id="force" min="0.2" max="1.2" step="0.05" value="0.55" oninput="updateParam('force', this.value)">
+                        <span class="value-display" id="force-value">0.55</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Trail persistence</label>
+                    <div class="slider-container">
+                        <input type="range" id="persistence" min="0.01" max="0.12" step="0.005" value="0.05" oninput="updateParam('persistence', this.value)">
+                        <span class="value-display" id="persistence-value">0.05</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Pulse cadence</label>
+                    <div class="slider-container">
+                        <input type="range" id="cadence" min="0" max="3" step="0.25" value="1" oninput="updateParam('cadence', this.value)">
+                        <span class="value-display" id="cadence-value">1</span>
+                    </div>
+                </div>
+                <div class="note">Tip: let it run — the chart accrues over time. Lower persistence = longer memory.</div>
+            </div>
+
+            <!-- Colors Section -->
+            <div class="control-section">
+                <h3>Colors</h3>
+                <div class="color-group">
+                    <label>Slack water (slow)</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color1" value="#2c5678" onchange="updateColor(0, this.value)">
+                        <span class="color-value" id="color1-value">#2c5678</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label>Open current</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color2" value="#5f9bff" onchange="updateColor(1, this.value)">
+                        <span class="color-value" id="color2-value">#5f9bff</span>
+                    </div>
+                </div>
+                <div class="color-group">
+                    <label>Turbulent strait (fast)</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color3" value="#54e6c1" onchange="updateColor(2, this.value)">
+                        <span class="color-value" id="color3-value">#54e6c1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Section -->
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row" style="margin-bottom:8px">
+                    <button class="button secondary" onclick="regenerate()">Regenerate</button>
+                    <button class="button" onclick="resetParameters()">Reset</button>
+                </div>
+                <button class="button tertiary" onclick="exportImage()">⬇ Download PNG</button>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container"><div class="loading">Charting the current…</div></div>
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════ PARAMETERS ═══════════════
+    let params = {
+        seed: 73,
+        vessels: 650,
+        noiseScale: 0.0018,
+        force: 0.55,
+        persistence: 0.05,
+        cadence: 1,
+        colorPalette: ['#2c5678', '#5f9bff', '#54e6c1']
+    };
+    let defaultParams = JSON.parse(JSON.stringify(params));
+
+    // ═══════════════ DEAD RECKONING ALGORITHM ═══════════════
+    let vessels = [], pulses = [], pal = [];
+
+    function hexToRgb(hex){const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:{r:0,g:0,b:0};}
+    function buildPalette(){pal=params.colorPalette.map(hexToRgb);}
+    function vColor(v, alpha){
+        let c1,c2,t;
+        if(v<0.5){c1=pal[0];c2=pal[1];t=v/0.5;} else {c1=pal[1];c2=pal[2];t=(v-0.5)/0.5;}
+        return color(c1.r+(c2.r-c1.r)*t, c1.g+(c2.g-c1.g)*t, c1.b+(c2.b-c1.b)*t, alpha);
+    }
+
+    class Vessel{
+        constructor(){this.reset(true);}
+        reset(initial){
+            this.x=random(width); this.y=random(height);
+            this.px=this.x; this.py=this.y; this.vx=0; this.vy=0;
+            this.age=initial?random(300):0; this.life=random(140,520);
+        }
+        update(t){
+            // two-octave current: calm reaches + turbulent straits
+            let s=params.noiseScale;
+            let n = noise(this.x*s, this.y*s, t*0.04)*1.0
+                  + noise(this.x*s*2.6+40, this.y*s*2.6-20, t*0.05)*0.5;
+            let a = n*TWO_PI*1.9;
+            this.vx = this.vx*0.86 + cos(a)*params.force;
+            this.vy = this.vy*0.86 + sin(a)*params.force;
+            this.px=this.x; this.py=this.y;
+            this.x+=this.vx; this.y+=this.vy;
+            let speed = constrain(mag(this.vx,this.vy)/1.25, 0, 1);
+            stroke(vColor(speed, 130)); strokeWeight(1.1);
+            line(this.px,this.py,this.x,this.y);
+            this.age++;
+            // telemetry ping from a becalmed vessel
+            if(params.cadence>0 && this.age>40 && speed<0.18 && random()<0.0009*params.cadence && pulses.length<18){
+                pulses.push({x:this.x,y:this.y,r:0,max:random(40,95)});
+            }
+            if(this.age>this.life||this.x<-20||this.x>width+20||this.y<-20||this.y>height+20)this.reset(false);
+        }
+    }
+
+    function initializeSystem(){
+        randomSeed(params.seed); noiseSeed(params.seed);
+        buildPalette();
+        vessels=[]; pulses=[];
+        for(let i=0;i<params.vessels;i++)vessels.push(new Vessel());
+        background(7,11,20);
+    }
+
+    function setup(){
+        let c=createCanvas(1200,1200); c.parent('canvas-container');
+        const l=document.querySelector('.loading'); if(l)l.style.display='none';
+        initializeSystem();
+    }
+
+    let frame=0;
+    function draw(){
+        // fade — trails are memory
+        noStroke(); fill(7,11,20, params.persistence*255);
+        rect(0,0,width,height);
+        for(const v of vessels)v.update(frame);
+        // pulses: the digital tick over the analog wash
+        noFill();
+        for(let i=pulses.length-1;i>=0;i--){
+            let q=pulses[i]; q.r+=0.8; let k=q.r/q.max;
+            stroke(pal[2].r,pal[2].g,pal[2].b, 110*(1-k)); strokeWeight(1);
+            circle(q.x,q.y,q.r*2);
+            if(k>=1)pulses.splice(i,1);
+        }
+        frame++;
+    }
+
+    // ═══════════════ UI HANDLERS ═══════════════
+    function updateParam(name,value){
+        params[name]=parseFloat(value);
+        document.getElementById(name+'-value').textContent=value;
+        if(name==='vessels'||name==='noiseScale'){initializeSystem();}
+    }
+    function updateColor(i,value){
+        params.colorPalette[i]=value;
+        document.getElementById('color'+(i+1)+'-value').textContent=value;
+        buildPalette();
+    }
+
+    // ═══════════════ SEED CONTROLS (kept) ═══════════════
+    function updateSeedDisplay(){document.getElementById('seed-input').value=params.seed;}
+    function updateSeed(){let v=parseInt(document.getElementById('seed-input').value);
+        if(v&&v>0){params.seed=v;initializeSystem();}else updateSeedDisplay();}
+    function previousSeed(){params.seed=Math.max(1,params.seed-1);updateSeedDisplay();initializeSystem();}
+    function nextSeed(){params.seed=params.seed+1;updateSeedDisplay();initializeSystem();}
+    function randomSeedAndUpdate(){params.seed=Math.floor(Math.random()*999999)+1;updateSeedDisplay();initializeSystem();}
+    function regenerate(){initializeSystem();}
+
+    function resetParameters(){
+        params=JSON.parse(JSON.stringify(defaultParams));
+        for(const k of ['vessels','noiseScale','force','persistence','cadence']){
+            document.getElementById(k).value=params[k];
+            document.getElementById(k+'-value').textContent=params[k];
+        }
+        for(let i=0;i<3;i++){
+            document.getElementById('color'+(i+1)).value=params.colorPalette[i];
+            document.getElementById('color'+(i+1)+'-value').textContent=params.colorPalette[i];
+        }
+        updateSeedDisplay(); initializeSystem();
+    }
+    function exportImage(){saveCanvas('dead-reckoning-'+params.seed,'png');}
+
+    window.addEventListener('load',updateSeedDisplay);
+    </script>
+</body>
+</html>
